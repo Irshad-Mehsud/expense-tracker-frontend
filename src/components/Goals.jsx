@@ -1,32 +1,98 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getGoals, createGoal, updateGoal, deleteGoal } from "../api/goalsApi";
+import { useAuth } from "../contexts/AuthContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 
 export default function Goals() {
-  const [goals, setGoals] = useState([
-    { id: 1, text: "Save $1000 emergency fund", completed: false },
-    { id: 2, text: "Pay off credit card debt", completed: false },
-  ]);
-  const [newGoal, setNewGoal] = useState("");
+  const { user } = useAuth();
+  const [goals, setGoals] = useState([]);
+  const [title, setTitle] = useState("");
+  const [targetAmount, setTargetAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const addGoal = (e) => {
+  // Fetch goals on mount
+  useEffect(() => {
+    const fetchGoals = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await getGoals();
+        setGoals(data);
+      } catch (err) {
+        setError("Failed to load goals");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGoals();
+  }, []);
+
+  // Add a new goal
+  const handleAddGoal = async (e) => {
     e.preventDefault();
-    if (!newGoal.trim()) return;
-    setGoals([
-      ...goals,
-      { id: Date.now(), text: newGoal.trim(), completed: false },
-    ]);
-    setNewGoal("");
+    if (!title.trim() || !targetAmount || !category || !user?._id) {
+      setError("Please fill all required fields.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const payload = {
+        title: title.trim(),
+        targetAmount: Number(targetAmount),
+        category,
+        user: user._id,
+        ...(deadline && { deadline }),
+        ...(description && { description }),
+      };
+      const created = await createGoal(payload);
+      setGoals([...goals, created.goal || created]);
+      setTitle("");
+      setTargetAmount("");
+      setCategory("");
+      setDeadline("");
+      setDescription("");
+    } catch (err) {
+      setError("Failed to add goal");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleGoal = (id) => {
-    setGoals(goals.map((g) => g.id === id ? { ...g, completed: !g.completed } : g));
+  // Toggle goal completion
+  const handleToggleGoal = async (id) => {
+    const goal = goals.find((g) => g.id === id);
+    if (!goal) return;
+    setLoading(true);
+    setError("");
+    try {
+      const updated = await updateGoal(id, { ...goal, completed: !goal.completed });
+      setGoals(goals.map((g) => g.id === id ? (updated.goal || updated) : g));
+    } catch (err) {
+      setError("Failed to update goal");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteGoal = (id) => {
-    setGoals(goals.filter((g) => g.id !== id));
+  // Delete a goal
+  const handleDeleteGoal = async (id) => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteGoal(id);
+      setGoals(goals.filter((g) => g.id !== id));
+    } catch (err) {
+      setError("Failed to delete goal");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,33 +102,69 @@ export default function Goals() {
           <CardTitle>Financial Goals</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={addGoal} className="flex gap-2 mb-4">
+          <form onSubmit={handleAddGoal} className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
             <Input
-              value={newGoal}
-              onChange={(e) => setNewGoal(e.target.value)}
-              placeholder="Add a new goal..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Goal Title*"
+              disabled={loading}
+              required
             />
-            <Button type="submit">Add</Button>
+            <Input
+              type="number"
+              value={targetAmount}
+              onChange={(e) => setTargetAmount(e.target.value)}
+              placeholder="Target Amount*"
+              disabled={loading}
+              required
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="border rounded px-2 py-1"
+              disabled={loading}
+              required
+            >
+              <option value="">Select Category*</option>
+              <option value="Savings">Savings</option>
+              <option value="Investment">Investment</option>
+              <option value="Purchase">Purchase</option>
+              <option value="Travel">Travel</option>
+              <option value="Education">Education</option>
+              <option value="Other">Other</option>
+            </select>
+            <Input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              placeholder="Deadline"
+              disabled={loading}
+            />
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Description"
+              disabled={loading}
+            />
+            <Button type="submit" disabled={loading} className="md:col-span-2">Add Goal</Button>
           </form>
+          {error && <div className="text-red-500 mb-2">{error}</div>}
           <ul className="space-y-2">
             {goals.map((goal) => (
               <li
-                key={goal.id}
-                className={`flex items-center justify-between p-3 rounded-lg bg-muted/50 ${goal.completed ? "line-through text-muted-foreground" : ""}`}
+                key={goal._id || goal.id}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
               >
-                <span
-                  className="cursor-pointer flex-1"
-                  onClick={() => toggleGoal(goal.id)}
-                  title="Toggle complete"
-                >
-                  {goal.text}
-                </span>
+                <span className="flex-1 font-semibold">{goal.title}</span>
+                <span className="ml-2 text-sm text-gray-500">{goal.category}</span>
+                <span className="ml-2 text-sm text-gray-500">Target: {goal.targetAmount}</span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="ml-2"
-                  onClick={() => deleteGoal(goal.id)}
+                  onClick={() => handleDeleteGoal(goal._id || goal.id)}
                   title="Delete goal"
+                  disabled={loading}
                 >
                   ✕
                 </Button>

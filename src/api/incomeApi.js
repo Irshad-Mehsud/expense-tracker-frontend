@@ -1,7 +1,7 @@
 
 // Income API - http://localhost:5000/api/incomes
-const API_BASE_URL = 'http://localhost:5000/api';
-
+const API_BASE_URL = 'https://expense-tracker-backend-blush-pi.vercel.app/api';
+// const Api_BASE_URL = "http://localhost:5000/api";
 // Get JWT token from localStorage
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
